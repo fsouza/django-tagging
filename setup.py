@@ -8,7 +8,6 @@ from distutils.core import setup
 import tagging
 
 
-
 def fullsplit(path, result=None):
     """
     Split a pathname into components (the opposite of os.path.join) in a
@@ -43,7 +42,8 @@ else:
 for dirpath, dirnames, filenames in os.walk(tagging_dir):
     # Ignore dirnames that start with '.'
     for i, dirname in enumerate(dirnames):
-        if dirname.startswith('.'): del dirnames[i]
+        if dirname.startswith('.'):
+            del dirnames[i]
     if '__init__.py' in filenames:
         packages.append('.'.join(fullsplit(dirpath)[len_root_dir:]))
     elif filenames:
@@ -51,15 +51,15 @@ for dirpath, dirnames, filenames in os.walk(tagging_dir):
 
 
 setup(
-    name = 'django-tagging',
-    version = tagging.get_version(),
-    description = 'Generic tagging application for Django',
-    author = 'Jonathan Buchanan',
-    author_email = 'jonathan.buchanan@gmail.com',
-    url = 'http://code.google.com/p/django-tagging/',
-    packages = packages,
-    data_files = data_files,
-    classifiers = ['Development Status :: 4 - Beta',
+    name='django-tagging',
+    version=tagging.get_version(),
+    description='Generic tagging application for Django',
+    author='Jonathan Buchanan',
+    author_email='jonathan.buchanan@gmail.com',
+    url='http://code.google.com/p/django-tagging/',
+    packages=packages,
+    data_files=data_files,
+    classifiers=['Development Status :: 4 - Beta',
                    'Environment :: Web Environment',
                    'Framework :: Django',
                    'Intended Audience :: Developers',
