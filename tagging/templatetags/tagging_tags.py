@@ -129,6 +129,9 @@ def do_tag_cloud_for_model(parser, token):
           One of ``linear`` or ``log``. Defines the font-size
           distribution algorithm to use when generating the tag cloud.
 
+       ``limit``
+          The maximum amount of tags to display.
+
     Examples::
 
        {% tag_cloud_for_model products.Widget as widget_tags %}
@@ -148,7 +151,7 @@ def do_tag_cloud_for_model(parser, token):
         for i in range(5, len_bits):
             try:
                 name, value = bits[i].split('=')
-                if name == 'steps' or name == 'min_count':
+                if name in ('steps', 'min_count', 'limit'):
                     try:
                         kwargs[str(name)] = int(value)
                     except ValueError:

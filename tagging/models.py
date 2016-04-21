@@ -75,7 +75,7 @@ class TagManager(models.Manager):
         return self.filter(items__content_type__pk=ctype.pk,
                            items__object_id=obj.pk)
 
-    def _get_usage(self, model, counts=False, min_count=None, extra_joins=None, extra_criteria=None, params=None):
+    def _get_usage(self, model, counts=False, min_count=None, extra_joins=None, extra_criteria=None, params=None, limit=None):
         """
         Perform the custom SQL query for ``usage_for_model`` and
         ``usage_for_queryset``.
@@ -97,18 +97,21 @@ class TagManager(models.Manager):
             %%s
         GROUP BY %(tag)s.id, %(tag)s.name
         %%s
-        ORDER BY %(tag)s.name ASC""" % {
+        ORDER BY %(order)s
+        %(limit_offset)s""" % {
             'tag': qn(self.model._meta.db_table),
-            'count_sql': counts and (', COUNT(%s)' % model_pk) or '',
+            'count_sql': counts and (', COUNT(%s) as count' % model_pk) or '',
             'tagged_item': qn(TaggedItem._meta.db_table),
             'model': model_table,
             'model_pk': model_pk,
             'content_type_id': ContentType.objects.get_for_model(model).pk,
+            'order': counts and 'count DESC' or ('%s.name ASC' % qn(self.model._meta.db_table)),
+            'limit_offset': limit is not None and ('LIMIT %s' % limit),
         }
 
         min_count_sql = ''
         if min_count is not None:
-            min_count_sql = 'HAVING COUNT(%s) >= %%s' % model_pk
+            min_count_sql = 'HAVING count >= %%s' % model_pk
             params.append(min_count)
 
         cursor = connection.cursor()
@@ -119,9 +122,10 @@ class TagManager(models.Manager):
             if counts:
                 t.count = row[2]
             tags.append(t)
-        return tags
 
-    def usage_for_model(self, model, counts=False, min_count=None, filters=None):
+        return sorted(tags, key=lambda t: t.name)
+
+    def usage_for_model(self, model, counts=False, min_count=None, filters=None, limit=None):
         """
         Obtain a list of tags associated with instances of the given
         Model class.
@@ -138,17 +142,19 @@ class TagManager(models.Manager):
         used by a subset of the Model's instances, pass a dictionary
         of field lookups to be applied to the given Model as the
         ``filters`` argument.
+
+        To limite the amount of tags returned, pass the ``limit`` param.
         """
         if filters is None: filters = {}
 
         queryset = model._default_manager.filter()
         for f in filters.items():
             queryset.query.add_filter(f)
-        usage = self.usage_for_queryset(queryset, counts, min_count)
+        usage = self.usage_for_queryset(queryset, counts, min_count, limit)
 
         return usage
 
-    def usage_for_queryset(self, queryset, counts=False, min_count=None):
+    def usage_for_queryset(self, queryset, counts=False, min_count=None, limit=None):
         """
         Obtain a list of tags associated with instances of a model
         contained in the given queryset.
@@ -178,7 +184,7 @@ class TagManager(models.Manager):
             extra_criteria = 'AND %s' % where
         else:
             extra_criteria = ''
-        return self._get_usage(queryset.model, counts, min_count, extra_joins, extra_criteria, params)
+        return self._get_usage(queryset.model, counts, min_count, extra_joins, extra_criteria, params, limit)
 
     def related_for_model(self, tags, model, counts=False, min_count=None):
         """
@@ -239,7 +245,7 @@ class TagManager(models.Manager):
         return related
 
     def cloud_for_model(self, model, steps=4, distribution=LOGARITHMIC,
-                        filters=None, min_count=None):
+                        filters=None, min_count=None, limit=None):
         """
         Obtain a list of tags associated with instances of the given
         Model, giving each tag a ``count`` attribute indicating how
@@ -262,9 +268,12 @@ class TagManager(models.Manager):
         To limit the tags displayed in the cloud to those with a
         ``count`` greater than or equal to ``min_count``, pass a value
         for the ``min_count`` argument.
+
+        To limite the amount of tags displayed in the cloud, pass a value for
+        the ``limit`` argument.
         """
         tags = list(self.usage_for_model(model, counts=True, filters=filters,
-                                         min_count=min_count))
+                                         min_count=min_count, limit=limit))
         return calculate_cloud(tags, steps, distribution)
 
 class TaggedItemManager(models.Manager):
@@ -431,7 +440,7 @@ class TaggedItemManager(models.Manager):
             'related_content_type_id': related_content_type.pk,
             # Hardcoding this for now just to get tests working again - this
             # should now be handled by the query object.
-            'limit_offset': num is not None and 'LIMIT %s' or '',
+            'limit_offset': num is not None and ('LIMIT %s' % num) or '',
         }
 
         cursor = connection.cursor()
